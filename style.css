@@ -320,7 +320,6 @@ button {
   bottom: -8px;
   height: 10px;
   background: linear-gradient(to bottom, var(--color-wood), var(--color-wood-dark));
-  z-index: -1;
 }
 
 .book-spine-title {
