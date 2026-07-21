@@ -293,15 +293,14 @@ button {
 .book-spine {
   position: relative;
   flex: 0 0 auto; /* 幅は中身ぴったり。伸び縮みさせない */
-  width: max-content;
-  max-width: 260px; /* 保険：極端に長い場合の上限 */
+  width: max-content; /* JS側で正確な幅を指定するので、これは保険 */
+  max-width: 320px; /* 保険：極端に長い場合の上限 */
   min-height: 100px;
   min-width: 64px;
   border-radius: 8px 8px 4px 4px;
   border: none;
   color: var(--color-white);
   display: block;
-  text-align: center; /* 縦書きタイトルを水平方向の中央にそろえる */
   padding: 14px 8px 18px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.15),
@@ -327,6 +326,7 @@ button {
   display: inline-block;
   writing-mode: vertical-rl;
   text-orientation: mixed;
+  text-align: left; /* 縦書きでは「上そろえ」になる指定 */
   font-weight: 700;
   line-height: 1.35;
   text-shadow: 0 1px 2px rgba(0,0,0,0.25);
@@ -513,26 +513,27 @@ button {
 }
 .undo-read-btn:active { transform: translateY(1px); }
 
-/* 読んだ回数の強調バッジ */
+/* 読んだ回数の強調バッジ（「よんだ！」ボタンと見分けやすいよう、
+   塗りつぶし＋影ではなく、枠線だけのシンプルな見た目にしている） */
 .read-count-badge {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--color-accent);
+  background: var(--color-bg-soft);
+  border: 3px solid var(--color-accent);
   border-radius: var(--radius-md);
   padding: 12px 18px;
   margin-bottom: 16px;
-  box-shadow: 0 3px 0 var(--color-accent-dark);
 }
 .read-count-badge-label {
   font-size: 14px;
   font-weight: 700;
-  color: var(--color-text);
+  color: var(--color-text-soft);
 }
 .read-count-badge-number {
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
-  color: var(--color-text);
+  color: var(--color-accent-dark);
 }
 
 .view-actions { margin-bottom: 14px; }

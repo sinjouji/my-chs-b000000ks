@@ -64,7 +64,7 @@ import {
 //        allow read, write: if isAllowedSpace(spaceId);
 //      }
 //
-const CORRECT_PASSPHRASE_HASH = "bd984cda4f8f9f5cfdf1774598e28f10ef0f3249bd0e70a1a498ce5b88820267";
+const CORRECT_PASSPHRASE_HASH = "ここに生成したハッシュ文字列を入れてください";
 const AUTH_STORAGE_KEY = "yomilog-auth-passphrase";
 
 // ---------------------------------------------------------
@@ -412,6 +412,18 @@ function createSpineElement(book) {
   const effectiveChars = Math.max(5, Math.min(longestSegment, SPINE_WRAP_CHAR_COUNT));
   const columnHeightPx = Math.round(effectiveChars * fontSizePx * SPINE_LINE_HEIGHT);
   titleSpan.style.height = `${columnHeightPx}px`;
+
+  // 背表紙全体の横幅は、必要な列数から自分で計算して明示的に指定する。
+  // （ブラウザの「中身に合わせて幅を決める」機能は、縦書き文字だと
+  //   実際より狭く見積もってしまうことがあり、右側に文字がはみ出す原因になるため）
+  const titleColumns = Math.max(1, Math.ceil(book.title.length / effectiveChars));
+  const subtitleColumns = book.subtitle ? Math.max(1, Math.ceil(book.subtitle.length / effectiveChars)) : 0;
+  const totalColumns = titleColumns + subtitleColumns;
+  const columnWidthPx = fontSizePx * SPINE_LINE_HEIGHT;
+  const SPINE_HORIZONTAL_PADDING_PX = 16; // CSSのpadding左右ぶん
+  const SPINE_WIDTH_SAFETY_MARGIN_PX = 14; // 見切れないための余裕
+  const spineWidthPx = Math.round(totalColumns * columnWidthPx) + SPINE_HORIZONTAL_PADDING_PX + SPINE_WIDTH_SAFETY_MARGIN_PX;
+  spine.style.width = `${spineWidthPx}px`;
 
   spine.appendChild(titleSpan);
 
