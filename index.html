@@ -6,6 +6,7 @@
 <title>よみログ - わたしの本だな</title>
 <link rel="icon" href="icon-bolog.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-bolog.png">
+
 <!--
   =============================================================
   よみログ（読書ログアプリ）
@@ -161,15 +162,20 @@
           <dt>まもる</dt>
           <dd id="detail-protect-view">-</dd>
         </div>
-        <div class="view-field">
+        <div class="view-field view-field-lastread">
           <dt>さいごによんだひ</dt>
-          <dd id="detail-lastread-view">まだよんでいないよ</dd>
-        </div>
-        <div class="view-field">
-          <dt>よんだかいすう</dt>
-          <dd id="detail-count-view">0かい</dd>
+          <dd>
+            <span id="detail-lastread-view">まだよんでいないよ</span>
+            <button id="btn-undo-read" type="button" class="undo-read-btn" hidden>とりけす</button>
+          </dd>
         </div>
       </dl>
+
+      <!-- 読んだ回数は目立つバッジで強調表示 -->
+      <div class="read-count-badge">
+        <span class="read-count-badge-label">よんだかいすう</span>
+        <span id="detail-count-view" class="read-count-badge-number">0かい</span>
+      </div>
 
       <div class="view-actions">
         <label class="read-date-picker">
@@ -249,6 +255,8 @@
 <!-- ==================== 「よんだ！」演出レイヤー ==================== -->
 <div id="read-effect-layer" class="read-effect-layer" hidden>
   <div class="lightning-flash"></div>
+  <span class="lightning-bolt lightning-bolt-left" aria-hidden="true">⚡</span>
+  <span class="lightning-bolt lightning-bolt-right" aria-hidden="true">⚡</span>
   <div class="read-effect-content">
     <p id="read-effect-count" class="read-effect-count">1かいよんだ！</p>
   </div>
