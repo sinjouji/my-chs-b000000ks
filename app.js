@@ -37,41 +37,48 @@ import {
 // ---------------------------------------------------------
 // 0. 合言葉（あいことば）による簡易保護
 // ---------------------------------------------------------
-// 仕組み：
-//   ・合言葉をそのまま保存せず、SHA-256でハッシュ化した値だけをこのファイルに書いておく
-//   ・入力された合言葉を同じ方法でハッシュ化して、下の値と一致するか比べる
-//   ・一致したら、そのハッシュ値をFirestoreの保存先パスの一部として使う
-//     （＝合言葉が違う人とはデータの置き場所ごと別になる）
-//   ・一度成功したらブラウザのlocalStorageに保存し、次回から自動で入れるようにする
+// 仕組み（予定表アプリ＝デイリープランと同じ考え方に合わせています）：
+//   ・画面ロックの正解判定には、合言葉をSHA-256でハッシュ化した値を使う
+//     （このJSファイルを人が見ても、合言葉そのものは書かれていない）
+//   ・入力が正解だったら、そのときの「入力した合言葉そのもの（平文）」を
+//     Firestoreの保存先パスの一部として使う
+//   ・Firestoreのセキュリティルール側は、そのパスの合言葉が
+//     許可リストに入っているかどうかで読み書きを許可する、という作りなので、
+//     アプリ側もハッシュではなく「平文の合言葉」をパスに使う必要がある
+//   ・一度成功したら合言葉（平文）をlocalStorageに保存し、次回から自動で入れるようにする
 //
 // 【正解ハッシュの作り方】
 //   1. 好きな合言葉を決める（例："ひみつのあいことば123"）
-//   2. パソコンやiPadのブラウザでこのページを開き、開発者ツール（コンソール）で
-//      次のように実行するとハッシュ文字列が表示されます：
+//   2. ブラウザの開発者ツール（コンソール）で次を実行するとハッシュ文字列が出ます：
 //
 //      await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ひみつのあいことば123"))
 //        .then(buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join(""))
 //
 //   3. 表示された文字列を、下の CORRECT_PASSPHRASE_HASH にコピーする
 //
-// 【予定表アプリ（デイリープラン）と同じ合言葉を使いたい場合】
-//   同じ合言葉から作ったハッシュ値をそのままコピーしてくれば大丈夫です。
-//   Firebaseプロジェクトが別なので、データが混ざる心配はありません。
+// 【Firestoreのセキュリティルールについて】
+//   予定表アプリと同じ合言葉を使う場合は、ルール側の isAllowedSpace() に
+//   その合言葉（平文）を追加し、次のような一致するmatchブロックも足してください。
+//
+//      match /groups/{spaceId}/{document=**} {
+//        allow read, write: if isAllowedSpace(spaceId);
+//      }
+//
 const CORRECT_PASSPHRASE_HASH = "bd984cda4f8f9f5cfdf1774598e28f10ef0f3249bd0e70a1a498ce5b88820267";
-const AUTH_STORAGE_KEY = "yomilog-auth-hash";
+const AUTH_STORAGE_KEY = "yomilog-auth-passphrase";
 
 // ---------------------------------------------------------
 // 1. Firestoreのコレクション・ドキュメントの場所
 // ---------------------------------------------------------
-// 合言葉のハッシュごとに保存場所を分けます。
-// 例：groups/【ハッシュ値】/books ／ groups/【ハッシュ値】/settings/main
+// 合言葉（平文）ごとに保存場所を分けます。
+// 例：groups/【合言葉】/books ／ groups/【合言葉】/settings/main
 // これにより「同じ合言葉を知っている端末どうし」だけがデータを共有します。
 let booksCollectionRef = null;
 let settingsDocRef = null;
 
-function setupFirestoreRefs(authHash) {
-  booksCollectionRef = collection(db, "groups", authHash, "books");
-  settingsDocRef = doc(db, "groups", authHash, "settings", "main");
+function setupFirestoreRefs(passphrase) {
+  booksCollectionRef = collection(db, "groups", passphrase, "books");
+  settingsDocRef = doc(db, "groups", passphrase, "settings", "main");
 }
 
 // ---------------------------------------------------------
@@ -889,8 +896,8 @@ function bindEvents() {
 // アプリ起動（合言葉ゲート → メイン画面）
 // ---------------------------------------------------------
 
-async function startApp(authHash) {
-  setupFirestoreRefs(authHash);
+async function startApp(passphrase) {
+  setupFirestoreRefs(passphrase);
   document.getElementById("gate-screen").hidden = true;
   document.getElementById("app-root").hidden = false;
 
@@ -923,10 +930,12 @@ function bindGateEvents() {
     e.preventDefault();
     errorText.hidden = true;
 
-    const enteredHash = await sha256Hex(input.value);
+    const enteredPassphrase = input.value;
+    const enteredHash = await sha256Hex(enteredPassphrase);
     if (enteredHash === CORRECT_PASSPHRASE_HASH) {
-      window.localStorage.setItem(AUTH_STORAGE_KEY, enteredHash);
-      await startApp(enteredHash);
+      // Firestoreのパスには平文の合言葉を使うので、平文のまま保存しておく
+      window.localStorage.setItem(AUTH_STORAGE_KEY, enteredPassphrase);
+      await startApp(enteredPassphrase);
     } else {
       errorText.hidden = false;
       input.value = "";
@@ -939,9 +948,12 @@ async function init() {
   bindGateEvents();
 
   // 前回すでに合言葉が合っていれば自動で入る
-  const storedHash = window.localStorage.getItem(AUTH_STORAGE_KEY);
-  if (storedHash && storedHash === CORRECT_PASSPHRASE_HASH) {
-    await startApp(storedHash);
+  const storedPassphrase = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  if (storedPassphrase) {
+    const storedHash = await sha256Hex(storedPassphrase);
+    if (storedHash === CORRECT_PASSPHRASE_HASH) {
+      await startApp(storedPassphrase);
+    }
   }
   // 合っていなければ、ゲート画面（合言葉入力）を表示したまま待つ
 }

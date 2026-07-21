@@ -30,7 +30,29 @@
 </head>
 <body>
 
-<!-- ==================== ヘッダー ==================== -->
+<!-- ==================== 合言葉ゲート画面 ==================== -->
+<!-- 正しい合言葉が入力されるまで、これ以外の画面は隠れています -->
+<div id="gate-screen" class="gate-screen">
+  <div class="gate-box">
+    <p class="gate-icon" aria-hidden="true">🔑</p>
+    <h1 class="gate-title">よみログ</h1>
+    <p class="gate-message">あいことばを入力してね</p>
+    <form id="gate-form" class="gate-form">
+      <input
+        type="password"
+        id="gate-input"
+        inputmode="text"
+        autocomplete="off"
+        placeholder="あいことば"
+        aria-label="あいことば">
+      <button type="submit" class="btn-primary btn-big">はいる</button>
+    </form>
+    <p id="gate-error" class="gate-error" hidden>ちがうみたい。もういちど入力してね</p>
+  </div>
+</div>
+
+<!-- ==================== ここから通常のアプリ画面 ==================== -->
+<div id="app-root" hidden>
 <header class="app-header">
   <div class="app-title">
     <span class="app-title-icon" aria-hidden="true">📖</span>
@@ -292,6 +314,8 @@
 <div id="toast" class="toast" hidden>
   <p id="toast-message"></p>
 </div>
+
+</div> <!-- /#app-root -->
 
 <!-- Firebase（Firestore）を使うので type="module" で読み込みます -->
 <script type="module" src="firebase-config.js"></script>
