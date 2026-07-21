@@ -200,7 +200,12 @@ function normalizeSettings(data) {
 }
 
 async function saveSettings() {
-  await setDoc(settingsDocRef, state.settings);
+  try {
+    await setDoc(settingsDocRef, state.settings);
+  } catch (err) {
+    console.error("せっていの保存に失敗しました:", err);
+    showToast("せっていの保存に\nしっぱいしたみたい…");
+  }
 }
 
 // お気に入りマークを追加
@@ -224,7 +229,7 @@ async function removeFavoriteMark(markId) {
   const topMarkId = state.settings.favoriteMarks[0].id;
   const affectedBooks = state.books.filter(b => b.favoriteMarkId === markId);
   await Promise.all(affectedBooks.map(b =>
-    updateDoc(doc(db, "books", b.id), { favoriteMarkId: topMarkId })
+    updateDoc(doc(booksCollectionRef, b.id), { favoriteMarkId: topMarkId })
   ));
 
   renderSettingsModal();
@@ -242,15 +247,23 @@ async function setRereadColor(slotIndex, colorValue) {
 // ---------------------------------------------------------
 
 function subscribeToBooks() {
-  onSnapshot(booksCollectionRef, (snapshot) => {
-    state.books = snapshot.docs.map(d => normalizeBook(d.id, d.data()));
-    renderBookGrid();
-    // 詳細モーダルを開いている最中にデータが変わったら表示も更新する
-    if (state.currentBookId && !document.getElementById("modal-detail").hidden) {
-      const book = state.books.find(b => b.id === state.currentBookId);
-      if (book) renderDetailView(book);
+  onSnapshot(
+    booksCollectionRef,
+    (snapshot) => {
+      state.books = snapshot.docs.map(d => normalizeBook(d.id, d.data()));
+      renderBookGrid();
+      // 詳細モーダルを開いている最中にデータが変わったら表示も更新する
+      if (state.currentBookId && !document.getElementById("modal-detail").hidden) {
+        const book = state.books.find(b => b.id === state.currentBookId);
+        if (book) renderDetailView(book);
+      }
+    },
+    (error) => {
+      // Firestoreの設定やセキュリティルールが原因で読み込めない場合はここに来る
+      console.error("本のデータ取得エラー:", error);
+      showToast("本のデータが\nよみこめないみたい…");
     }
-  });
+  );
 }
 
 // 保存されている本のデータが多少壊れていても表示できるように補正する
@@ -557,9 +570,14 @@ async function saveEditForm(event) {
     favoriteMarkId: selectedFavoriteBtn ? selectedFavoriteBtn.dataset.markId : book.favoriteMarkId,
   };
 
-  await updateDoc(doc(db, "books", book.id), updated);
-  switchToViewMode();
-  showToast("セーブしました！");
+  try {
+    await updateDoc(doc(booksCollectionRef, book.id), updated);
+    switchToViewMode();
+    showToast("セーブしました！");
+  } catch (err) {
+    console.error("本の保存に失敗しました:", err);
+    showToast("セーブに\nしっぱいしたみたい…");
+  }
 }
 
 // ---------------------------------------------------------
@@ -586,12 +604,16 @@ async function recordRead(book, dateStr) {
   const newHistory = [...book.readHistory, { id: makeLocalId("read"), date: dateStr }];
   const newCount = book.readCount + 1;
 
-  await updateDoc(doc(db, "books", book.id), {
-    readHistory: newHistory,
-    readCount: newCount,
-  });
-
-  playReadEffect(newCount);
+  try {
+    await updateDoc(doc(booksCollectionRef, book.id), {
+      readHistory: newHistory,
+      readCount: newCount,
+    });
+    playReadEffect(newCount);
+  } catch (err) {
+    console.error("よんだ記録の保存に失敗しました:", err);
+    showToast("きろくの保存に\nしっぱいしたみたい…");
+  }
 }
 
 function playReadEffect(count) {
@@ -641,9 +663,14 @@ async function copyCurrentBook() {
     createdAt: Date.now(),
   };
 
-  await addDoc(booksCollectionRef, newBook);
-  closeDetailModal();
-  showToast("コピーしました！");
+  try {
+    await addDoc(booksCollectionRef, newBook);
+    closeDetailModal();
+    showToast("コピーしました！");
+  } catch (err) {
+    console.error("コピーに失敗しました:", err);
+    showToast("コピーに\nしっぱいしたみたい…");
+  }
 }
 
 async function deleteCurrentBook() {
@@ -655,8 +682,13 @@ async function deleteCurrentBook() {
     return;
   }
 
-  await deleteDoc(doc(db, "books", book.id));
-  closeDetailModal();
+  try {
+    await deleteDoc(doc(booksCollectionRef, book.id));
+    closeDetailModal();
+  } catch (err) {
+    console.error("さくじょに失敗しました:", err);
+    showToast("さくじょに\nしっぱいしたみたい…");
+  }
 }
 
 async function createNewBook(title) {
@@ -677,8 +709,13 @@ async function createNewBook(title) {
     createdAt: Date.now(),
   };
 
-  await addDoc(booksCollectionRef, newBook);
-  showToast("本をついかしたよ！");
+  try {
+    await addDoc(booksCollectionRef, newBook);
+    showToast("本をついかしたよ！");
+  } catch (err) {
+    console.error("本の追加に失敗しました:", err);
+    showToast("本の追加に\nしっぱいしたみたい…");
+  }
 }
 
 // ---------------------------------------------------------
@@ -856,9 +893,25 @@ async function startApp(authHash) {
   setupFirestoreRefs(authHash);
   document.getElementById("gate-screen").hidden = true;
   document.getElementById("app-root").hidden = false;
-  await loadSettingsOnce();
+
+  // ボタンなどの操作は、データ取得の成否にかかわらず必ず先に使えるようにする
+  // （こうしておくと、もしFirestoreの読み込みに失敗しても「何も反応しない」状態にならず、
+  //   下のトーストでエラーに気づける）
   bindEvents();
-  subscribeToBooks();
+
+  try {
+    await loadSettingsOnce();
+  } catch (err) {
+    console.error("せっていの読み込みに失敗しました:", err);
+    showToast("せっていの読みこみに\nしっぱいしたみたい…");
+  }
+
+  try {
+    subscribeToBooks();
+  } catch (err) {
+    console.error("本のデータ取得に失敗しました:", err);
+    showToast("本のデータの読みこみに\nしっぱいしたみたい…");
+  }
 }
 
 function bindGateEvents() {
