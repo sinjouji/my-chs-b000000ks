@@ -302,7 +302,7 @@ button {
   color: var(--color-white);
   display: block;
   text-align: center; /* タイトル全体を横方向の中央にそろえる */
-  padding: 25px 8px 18px;/* しおり用スペース確保 */
+  padding: 25px 30px 18px 8px;/* しおり用スペース確保 */
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.15),
     3px 4px 0 rgba(0,0,0,0.15);
