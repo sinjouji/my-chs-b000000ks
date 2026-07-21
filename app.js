@@ -22,7 +22,7 @@
 // あわせて直すのが基本の流れです。
 // =============================================================
 
-import { db } from "./firebase-config.js";
+import { db, CORRECT_PASSPHRASE_HASH } from "./firebase-config.js";
 import {
   collection,
   doc,
@@ -47,14 +47,8 @@ import {
 //     アプリ側もハッシュではなく「平文の合言葉」をパスに使う必要がある
 //   ・一度成功したら合言葉（平文）をlocalStorageに保存し、次回から自動で入れるようにする
 //
-// 【正解ハッシュの作り方】
-//   1. 好きな合言葉を決める（例："ひみつのあいことば123"）
-//   2. ブラウザの開発者ツール（コンソール）で次を実行するとハッシュ文字列が出ます：
-//
-//      await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ひみつのあいことば123"))
-//        .then(buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join(""))
-//
-//   3. 表示された文字列を、下の CORRECT_PASSPHRASE_HASH にコピーする
+// 正解ハッシュ（CORRECT_PASSPHRASE_HASH）は firebase-config.js の方に
+// まとめてあります。作り方や書き換え方もそちらのコメントを見てください。
 //
 // 【Firestoreのセキュリティルールについて】
 //   予定表アプリと同じ合言葉を使う場合は、ルール側の isAllowedSpace() に
@@ -64,7 +58,6 @@ import {
 //        allow read, write: if isAllowedSpace(spaceId);
 //      }
 //
-const CORRECT_PASSPHRASE_HASH = "bd984cda4f8f9f5cfdf1774598e28f10ef0f3249bd0e70a1a498ce5b88820267";
 const AUTH_STORAGE_KEY = "yomilog-auth-passphrase";
 
 // ---------------------------------------------------------
