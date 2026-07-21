@@ -85,7 +85,8 @@ function setupFirestoreRefs(passphrase) {
 // 2. アプリ全体で使う状態（state）
 // ---------------------------------------------------------
 // 設定のデフォルト値。Firestoreにまだ設定が無いときはこれを使います。
-// favoriteMarks: 前から順に「いちばんすき」→「すき」の並びです。
+// favoriteMarks: 「お気に入りマークの候補」。自由に追加・削除できます。
+// activeFavoriteMarkId: 候補の中から、実際に5段階表示で使う1つを指定します。
 // rereadColors: しおりの色。7個ぶん。使わない場所はnull（＝白色）。
 const DEFAULT_SETTINGS = {
   favoriteMarks: [
@@ -95,6 +96,7 @@ const DEFAULT_SETTINGS = {
     { id: "mark-book", emoji: "📚" },
     { id: "mark-bolt", emoji: "⚡️" },
   ],
+  activeFavoriteMarkId: "mark-star",
   rereadColors: [null, null, null, null, null, null, null],
 };
 
@@ -147,13 +149,16 @@ function formatDateJp(dateStr) {
 }
 
 // 縦書きタイトルが背表紙からはみ出さないよう、文字数に応じて文字サイズを自動調整
+// （折り返しは禁止しているので、ここでの調整はあくまで「見た目のバランス」用。
+//   どんなに長くても折り返さない＝見切れない設計になっている）
 function fontSizeForTitle(title) {
   const len = title.length;
   if (len <= 6) return "20px";
   if (len <= 9) return "17px";
   if (len <= 12) return "15px";
   if (len <= 16) return "13px";
-  return "11px";
+  if (len <= 22) return "11px";
+  return "10px";
 }
 
 // 文字列からパレット内の色を安定的に選ぶ（同じ本は毎回同じ色になる）
@@ -173,10 +178,11 @@ function getLastReadDate(book) {
   }, null);
 }
 
-// お気に入りマークのIDから、そのマークが今のせっていの何番目か（0始まり）を返す
-// マークが見つからない（削除済みなど）場合は -1
-function favoriteRank(favoriteMarkId) {
-  return state.settings.favoriteMarks.findIndex(m => m.id === favoriteMarkId);
+// 今、5段階のおきにいり表示に使われているマークを返す
+// （設定が壊れていて見つからない場合は、候補の一番上を代わりに使う）
+function getActiveFavoriteMark() {
+  return state.settings.favoriteMarks.find(m => m.id === state.settings.activeFavoriteMarkId)
+    || state.settings.favoriteMarks[0];
 }
 
 // ---------------------------------------------------------
@@ -203,7 +209,11 @@ function normalizeSettings(data) {
   let rereadColors = Array.isArray(data.rereadColors) ? data.rereadColors.slice(0, 7) : [];
   while (rereadColors.length < 7) rereadColors.push(null);
 
-  return { favoriteMarks, rereadColors };
+  // 使用中マークが候補の中に無い（削除された等）場合は、候補の一番上へ自動で戻す
+  const activeExists = favoriteMarks.some(m => m.id === data.activeFavoriteMarkId);
+  const activeFavoriteMarkId = activeExists ? data.activeFavoriteMarkId : favoriteMarks[0].id;
+
+  return { favoriteMarks, activeFavoriteMarkId, rereadColors };
 }
 
 async function saveSettings() {
@@ -224,22 +234,30 @@ async function addFavoriteMark(emoji) {
 }
 
 // お気に入りマークを削除。
-// 削除されたマークを使っていた本は「一番上のマーク」へ自動でつけかえる（データが壊れないように）。
+// 今つかっているマークが削除された場合は「一番上の候補」へ自動でつけかえる。
+// （本のデータには番号[段階]しか保存していないので、本のデータ側を直す必要はない）
 async function removeFavoriteMark(markId) {
   if (state.settings.favoriteMarks.length <= 1) {
     showToast("マークは\n1こ以上のこしてね");
     return;
   }
   state.settings.favoriteMarks = state.settings.favoriteMarks.filter(m => m.id !== markId);
+
+  if (state.settings.activeFavoriteMarkId === markId) {
+    state.settings.activeFavoriteMarkId = state.settings.favoriteMarks[0].id;
+  }
+
   await saveSettings();
-
-  const topMarkId = state.settings.favoriteMarks[0].id;
-  const affectedBooks = state.books.filter(b => b.favoriteMarkId === markId);
-  await Promise.all(affectedBooks.map(b =>
-    updateDoc(doc(booksCollectionRef, b.id), { favoriteMarkId: topMarkId })
-  ));
-
   renderSettingsModal();
+  renderBookGrid();
+}
+
+// 5段階表示に使うマークを切り替える
+async function setActiveFavoriteMark(markId) {
+  state.settings.activeFavoriteMarkId = markId;
+  await saveSettings();
+  renderSettingsModal();
+  renderBookGrid();
 }
 
 // さいどく色（1〜7）を変更
@@ -284,7 +302,7 @@ function normalizeBook(id, data) {
     protected: data.protected !== false, // 未設定ならデフォルトON
     reread: !!data.reread,
     rereadColorSlot: Number.isFinite(data.rereadColorSlot) ? data.rereadColorSlot : 1,
-    favoriteMarkId: data.favoriteMarkId || (state.settings.favoriteMarks[0]?.id ?? null),
+    favoriteLevel: Math.min(5, Math.max(0, Number.isFinite(data.favoriteLevel) ? data.favoriteLevel : 0)),
     readCount: Number.isFinite(data.readCount) ? data.readCount : 0,
     readHistory: Array.isArray(data.readHistory) ? data.readHistory : [],
     createdAt: data.createdAt || 0,
@@ -320,19 +338,13 @@ function getVisibleBooks() {
       list.sort((a, b) => a.volume - b.volume);
       break;
     case "favorite-desc":
-      list.sort((a, b) => rankForSort(a) - rankForSort(b));
+      list.sort((a, b) => b.favoriteLevel - a.favoriteLevel);
       break;
     case "favorite-asc":
-      list.sort((a, b) => rankForSort(b) - rankForSort(a));
+      list.sort((a, b) => a.favoriteLevel - b.favoriteLevel);
       break;
   }
   return list;
-}
-
-// お気に入り順ソート用：マークが見つからない本は一番下の扱いにする
-function rankForSort(book) {
-  const rank = favoriteRank(book.favoriteMarkId);
-  return rank === -1 ? 9999 : rank;
 }
 
 function renderBookGrid() {
@@ -484,20 +496,20 @@ function renderDetailView(book) {
     document.getElementById("detail-reread-view").textContent = "していない";
   }
 
-  // お気に入り表示（選ばれていない部分はグレー・うすめ）
+  // お気に入り表示：使用中のマークを5段階ぶんくり返し、
+  // 選んだ段階まで色つき、残りはグレー・うすめで表示
   const favWrap = document.getElementById("detail-favorite-view");
   favWrap.innerHTML = "";
-  const marks = state.settings.favoriteMarks;
-  const selectedRank = favoriteRank(book.favoriteMarkId);
-  marks.forEach((mark, i) => {
+  const activeMark = getActiveFavoriteMark();
+  for (let level = 1; level <= 5; level++) {
     const span = document.createElement("span");
-    span.textContent = mark.emoji;
-    if (selectedRank === -1 || i > selectedRank) {
+    span.textContent = activeMark.emoji;
+    if (level > book.favoriteLevel) {
       span.style.opacity = "0.28";
       span.style.filter = "grayscale(1)";
     }
     favWrap.appendChild(span);
-  });
+  }
 
   // 「よんだ！」用の日付は、モーダルを開いた瞬間はいつも今日にする
   state.pendingReadDate = todayStr();
@@ -516,7 +528,7 @@ function openEditMode() {
   document.getElementById("edit-protect").checked = book.protected;
 
   renderRereadColorSelect(book.rereadColorSlot);
-  renderFavoritePicker(book.favoriteMarkId);
+  renderFavoritePicker(book.favoriteLevel);
 
   switchToEditMode();
 }
@@ -541,22 +553,26 @@ function updateRereadColorPreview() {
   document.getElementById("reread-color-preview").style.background = color;
 }
 
-function renderFavoritePicker(selectedMarkId) {
+// お気に入りの段階（0〜5）を選ぶピッカー。
+// 使用中のマークだけを5個ならべ、タップした段階までを「選択中」にする。
+// 選んでいる段階をもう一度タップすると0（未評価）に戻る。
+function renderFavoritePicker(currentLevel) {
   const wrap = document.getElementById("edit-favorite-picker");
   wrap.innerHTML = "";
-  state.settings.favoriteMarks.forEach(mark => {
+  wrap.dataset.currentLevel = String(currentLevel);
+  const mark = getActiveFavoriteMark();
+
+  for (let level = 1; level <= 5; level++) {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "favorite-picker-item";
-    if (mark.id === selectedMarkId) btn.classList.add("is-selected");
+    btn.className = "favorite-picker-item" + (level <= currentLevel ? " is-selected" : "");
     btn.textContent = mark.emoji;
-    btn.dataset.markId = mark.id;
     btn.addEventListener("click", () => {
-      wrap.querySelectorAll(".favorite-picker-item").forEach(el => el.classList.remove("is-selected"));
-      btn.classList.add("is-selected");
+      const newLevel = (Number(wrap.dataset.currentLevel) === level) ? 0 : level;
+      renderFavoritePicker(newLevel);
     });
     wrap.appendChild(btn);
-  });
+  }
 }
 
 async function saveEditForm(event) {
@@ -564,7 +580,8 @@ async function saveEditForm(event) {
   const book = state.books.find(b => b.id === state.currentBookId);
   if (!book) return;
 
-  const selectedFavoriteBtn = document.querySelector("#edit-favorite-picker .favorite-picker-item.is-selected");
+  const favoriteWrap = document.getElementById("edit-favorite-picker");
+  const favoriteLevel = Number(favoriteWrap.dataset.currentLevel || 0);
 
   const updated = {
     title: document.getElementById("edit-title").value.trim() || "（タイトルなし）",
@@ -574,7 +591,7 @@ async function saveEditForm(event) {
     reread: document.getElementById("edit-reread").checked,
     rereadColorSlot: Number(document.getElementById("edit-reread-color").value),
     protected: document.getElementById("edit-protect").checked,
-    favoriteMarkId: selectedFavoriteBtn ? selectedFavoriteBtn.dataset.markId : book.favoriteMarkId,
+    favoriteLevel,
   };
 
   try {
@@ -664,7 +681,7 @@ async function copyCurrentBook() {
     protected: book.protected,
     reread: false,
     rereadColorSlot: 1,
-    favoriteMarkId: state.settings.favoriteMarks[0]?.id ?? null,
+    favoriteLevel: 0,
     readCount: 0,                 // 読了回数はコピーしない
     readHistory: [],              // 読了履歴はコピーしない
     createdAt: Date.now(),
@@ -710,7 +727,7 @@ async function createNewBook(title) {
     protected: true,
     reread: false,
     rereadColorSlot: 1,
-    favoriteMarkId: state.settings.favoriteMarks[0]?.id ?? null,
+    favoriteLevel: 0,
     readCount: 0,
     readHistory: [],
     createdAt: Date.now(),
@@ -744,12 +761,20 @@ function showToast(message, durationMs = 2400) {
 // ---------------------------------------------------------
 
 function renderSettingsModal() {
-  // お気に入りマーク一覧
+  // お気に入りマーク一覧（候補の中から使うものを1つ選ぶ）
   const markList = document.getElementById("favorite-mark-list");
   markList.innerHTML = "";
-  state.settings.favoriteMarks.forEach((mark, index) => {
+  state.settings.favoriteMarks.forEach((mark) => {
     const li = document.createElement("li");
     li.className = "settings-mark-item";
+
+    const radio = document.createElement("input");
+    radio.type = "radio";
+    radio.name = "active-favorite-mark";
+    radio.className = "mark-active-radio";
+    radio.checked = mark.id === state.settings.activeFavoriteMarkId;
+    radio.setAttribute("aria-label", `${mark.emoji} をつかう`);
+    radio.addEventListener("change", () => setActiveFavoriteMark(mark.id));
 
     const emojiSpan = document.createElement("span");
     emojiSpan.className = "mark-emoji";
@@ -757,14 +782,14 @@ function renderSettingsModal() {
 
     const posSpan = document.createElement("span");
     posSpan.className = "mark-position";
-    posSpan.textContent = index === 0 ? "いちばん上（いちばんすき）" : `${index + 1}ばんめ`;
+    posSpan.textContent = mark.id === state.settings.activeFavoriteMarkId ? "いまつかっているマーク" : "";
 
     const removeBtn = document.createElement("button");
     removeBtn.className = "settings-remove-btn";
     removeBtn.textContent = "✕";
     removeBtn.addEventListener("click", () => removeFavoriteMark(mark.id));
 
-    li.append(emojiSpan, posSpan, removeBtn);
+    li.append(radio, emojiSpan, posSpan, removeBtn);
     markList.appendChild(li);
   });
 

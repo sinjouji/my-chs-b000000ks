@@ -281,32 +281,23 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 12px;
   align-items: end;
-
-  /* 木の棚板を各行の下に敷いているように見せる背景 */
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 188px,
-    var(--color-wood) 188px,
-    var(--color-wood-dark) 200px,
-    transparent 200px
-  );
 }
 
-/* 背表紙 1冊分 */
+/* 背表紙 1冊分（縦書きタイトルが絶対に折り返さないようにし、
+   文字数が多い本は高さの方で自然に伸びるようにしています） */
 .book-spine {
   position: relative;
-  height: 188px;
+  min-height: 150px;
   border-radius: 8px 8px 4px 4px;
   border: none;
   color: var(--color-white);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 14px 6px 10px;
+  padding: 14px 6px 18px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.15),
     3px 4px 0 rgba(0,0,0,0.15);
@@ -314,13 +305,25 @@ button {
 }
 .book-spine:active { transform: translateY(3px); }
 
+/* 本の下に木の棚板がついているように見せる（本ごとの土台なので、
+   本の高さがバラバラでも同じ行なら必ず同じ高さで底が揃います） */
+.book-spine::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  right: -6px;
+  bottom: -8px;
+  height: 10px;
+  background: linear-gradient(to bottom, var(--color-wood), var(--color-wood-dark));
+  z-index: -1;
+}
+
 .book-spine-title {
   writing-mode: vertical-rl;
   text-orientation: mixed;
   font-weight: 700;
   line-height: 1.35;
-  max-height: 100%;
-  overflow: hidden;
+  white-space: nowrap; /* 2列に折り返さない＝文字が絶対に見切れない */
   text-shadow: 0 1px 2px rgba(0,0,0,0.25);
 }
 
@@ -577,8 +580,13 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.32;
+  filter: grayscale(1);
+  transition: transform 0.1s ease, opacity 0.1s ease;
 }
 .favorite-picker-item.is-selected {
+  opacity: 1;
+  filter: none;
   border-color: var(--color-accent-dark);
   background: var(--color-accent);
   transform: scale(1.08);
@@ -617,6 +625,7 @@ button {
 
 .settings-mark-item .mark-emoji { font-size: 22px; width: 32px; text-align: center; }
 .settings-mark-item .mark-position { color: var(--color-text-soft); font-size: 12px; flex: 1; }
+.mark-active-radio { width: 22px; height: 22px; accent-color: var(--color-accent-dark); flex-shrink: 0; }
 
 .settings-remove-btn {
   border: none;
