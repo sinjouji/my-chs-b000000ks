@@ -280,10 +280,10 @@ button {
 }
 
 .book-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(64px, auto));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
   gap: 12px;
-  align-items: end;
 }
 
 /* 背表紙 1冊分
@@ -292,6 +292,9 @@ button {
      （＝右にはみ出さず、必ず全部表示される） */
 .book-spine {
   position: relative;
+  flex: 0 0 auto; /* 幅は中身ぴったり。伸び縮みさせない */
+  width: max-content;
+  max-width: 260px; /* 保険：極端に長い場合の上限 */
   min-height: 100px;
   min-width: 64px;
   border-radius: 8px 8px 4px 4px;
@@ -491,6 +494,46 @@ button {
 .view-field dd { margin: 0; font-weight: 700; text-align: right; }
 
 .favorite-display { display: flex; gap: 4px; font-size: 18px; }
+
+/* 「さいごによんだひ」の行だけ、取り消しボタンを横に並べる */
+.view-field-lastread dd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.undo-read-btn {
+  border: none;
+  background: #FFF0EE;
+  color: #C6483A;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+.undo-read-btn:active { transform: translateY(1px); }
+
+/* 読んだ回数の強調バッジ */
+.read-count-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 3px 0 var(--color-accent-dark);
+}
+.read-count-badge-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--color-text);
+}
+.read-count-badge-number {
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--color-text);
+}
 
 .view-actions { margin-bottom: 14px; }
 
@@ -710,6 +753,39 @@ button {
   0%   { opacity: 0; }
   15%  { opacity: 0.9; }
   100% { opacity: 0; }
+}
+
+/* 画面左右の稲妻（モーダルの外側で光る演出） */
+.lightning-bolt {
+  position: absolute;
+  font-size: 72px;
+  line-height: 1;
+  filter: drop-shadow(0 0 14px #FFE066) drop-shadow(0 0 26px #FFD23F);
+  animation: lightning-flicker 0.7s ease-in-out 2;
+}
+.lightning-bolt-left {
+  left: 4vw;
+  top: 22%;
+  transform: rotate(-10deg);
+}
+.lightning-bolt-right {
+  right: 4vw;
+  top: 58%;
+  transform: rotate(12deg) scaleX(-1);
+}
+
+@keyframes lightning-flicker {
+  0%, 100% { opacity: 0; }
+  10%  { opacity: 1; }
+  22%  { opacity: 0.15; }
+  38%  { opacity: 1; }
+  55%  { opacity: 0.1; }
+  75%  { opacity: 0.9; }
+}
+
+/* 画面が小さい端末では稲妻を少し控えめに */
+@media (max-width: 420px) {
+  .lightning-bolt { font-size: 52px; }
 }
 
 .read-effect-content {

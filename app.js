@@ -172,12 +172,23 @@ function colorForBookId(id) {
   return SPINE_COLOR_PALETTE[hash % SPINE_COLOR_PALETTE.length];
 }
 
+// 本の「最新に読んだ記録（エントリそのもの）」を履歴から取得（履歴が無ければnull）
+// 同じ日付が複数あるときは、配列の中で一番あとに追加されたもの（＝一番最近の操作）を返す
+function getLastReadEntry(book) {
+  if (!book.readHistory || book.readHistory.length === 0) return null;
+  let latest = null;
+  for (const entry of book.readHistory) {
+    if (!latest || entry.date >= latest.date) {
+      latest = entry;
+    }
+  }
+  return latest;
+}
+
 // 本の「最新に読んだ日」を履歴から取得（履歴が無ければnull）
 function getLastReadDate(book) {
-  if (!book.readHistory || book.readHistory.length === 0) return null;
-  return book.readHistory.reduce((latest, entry) => {
-    return !latest || entry.date > latest ? entry.date : latest;
-  }, null);
+  const entry = getLastReadEntry(book);
+  return entry ? entry.date : null;
 }
 
 // 今、5段階のおきにいり表示に使われているマークを返す
@@ -511,6 +522,8 @@ function renderDetailView(book) {
   document.getElementById("detail-lastread-view").textContent =
     lastRead ? formatDateJp(lastRead) : "まだよんでいないよ";
   document.getElementById("detail-count-view").textContent = `${book.readCount}かい`;
+  // 記録が無いときは取り消すものが無いので、取り消しボタンごと隠す
+  document.getElementById("btn-undo-read").hidden = !lastRead;
 
   // さいどく表示
   if (book.reread) {
@@ -662,6 +675,30 @@ async function recordRead(book, dateStr) {
   } catch (err) {
     console.error("よんだ記録の保存に失敗しました:", err);
     showToast("きろくの保存に\nしっぱいしたみたい…");
+  }
+}
+
+// 「さいごによんだひ」に表示されている記録だけをピンポイントで取り消す
+// （間違えて登録したときに、その1件だけ消して回数も1つ戻すためのもの）
+async function undoLastRead() {
+  const book = state.books.find(b => b.id === state.currentBookId);
+  if (!book) return;
+
+  const entryToRemove = getLastReadEntry(book);
+  if (!entryToRemove) return;
+
+  const newHistory = book.readHistory.filter(entry => entry.id !== entryToRemove.id);
+  const newCount = Math.max(0, book.readCount - 1);
+
+  try {
+    await updateDoc(doc(booksCollectionRef, book.id), {
+      readHistory: newHistory,
+      readCount: newCount,
+    });
+    showToast("きろくをとりけしたよ");
+  } catch (err) {
+    console.error("記録の取り消しに失敗しました:", err);
+    showToast("とりけしに\nしっぱいしたみたい…");
   }
 }
 
@@ -900,6 +937,7 @@ function bindEvents() {
   document.getElementById("btn-copy").addEventListener("click", copyCurrentBook);
   document.getElementById("btn-delete").addEventListener("click", deleteCurrentBook);
   document.getElementById("btn-read-today").addEventListener("click", handleReadButton);
+  document.getElementById("btn-undo-read").addEventListener("click", undoLastRead);
   document.getElementById("read-date-input").addEventListener("change", (e) => {
     state.pendingReadDate = e.target.value;
   });
