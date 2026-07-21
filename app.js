@@ -413,7 +413,7 @@ function createSpineElement(book) {
   const subtitleColumns = book.subtitle ? Math.max(1, Math.ceil(book.subtitle.length / effectiveChars)) : 0;
   const totalColumns = titleColumns + subtitleColumns;
   const columnWidthPx = fontSizePx * SPINE_LINE_HEIGHT;
-  const SPINE_HORIZONTAL_PADDING_PX = 16; // CSSのpadding左右ぶん
+  const SPINE_HORIZONTAL_PADDING_PX = 38; // CSSのpadding左右ぶん（左8px+右30px、しおり用スペース込み）
   const SPINE_WIDTH_SAFETY_MARGIN_PX = 14; // 見切れないための余裕
   const spineWidthPx = Math.round(totalColumns * columnWidthPx) + SPINE_HORIZONTAL_PADDING_PX + SPINE_WIDTH_SAFETY_MARGIN_PX;
   spine.style.width = `${spineWidthPx}px`;
