@@ -64,7 +64,7 @@ import {
 //        allow read, write: if isAllowedSpace(spaceId);
 //      }
 //
-const CORRECT_PASSPHRASE_HASH = "ここに生成したハッシュ文字列を入れてください";
+const CORRECT_PASSPHRASE_HASH = "bd984cda4f8f9f5cfdf1774598e28f10ef0f3249bd0e70a1a498ce5b88820267";
 const AUTH_STORAGE_KEY = "yomilog-auth-passphrase";
 
 // ---------------------------------------------------------
