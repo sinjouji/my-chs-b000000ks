@@ -281,23 +281,25 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(64px, auto));
   gap: 12px;
   align-items: end;
 }
 
-/* 背表紙 1冊分（縦書きタイトルが絶対に折り返さないようにし、
-   文字数が多い本は高さの方で自然に伸びるようにしています） */
+/* 背表紙 1冊分
+   ・幅は中身（縦書きの列数）にまかせる＝タイトルが長い本は少し太くなる
+   ・高さは「1列ぶんの目安の高さ」で統一し、それを超える分は横に列が増える
+     （＝右にはみ出さず、必ず全部表示される） */
 .book-spine {
   position: relative;
-  min-height: 150px;
+  min-height: 100px;
+  min-width: 64px;
   border-radius: 8px 8px 4px 4px;
   border: none;
   color: var(--color-white);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 14px 6px 18px;
+  display: block;
+  text-align: center; /* 縦書きタイトルを水平方向の中央にそろえる */
+  padding: 14px 8px 18px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.15),
     3px 4px 0 rgba(0,0,0,0.15);
@@ -319,12 +321,19 @@ button {
 }
 
 .book-spine-title {
+  display: inline-block;
   writing-mode: vertical-rl;
   text-orientation: mixed;
   font-weight: 700;
   line-height: 1.35;
-  white-space: nowrap; /* 2列に折り返さない＝文字が絶対に見切れない */
   text-shadow: 0 1px 2px rgba(0,0,0,0.25);
+  /* 高さ（＝1列に入る文字数の目安）はJS側で文字数に応じて指定します */
+}
+
+/* サブタイトルはタイトルより少し控えめに */
+.spine-title-sub {
+  opacity: 0.78;
+  font-weight: 500;
 }
 
 /* 保護中の鍵アイコン */

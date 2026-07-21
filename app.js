@@ -148,17 +148,19 @@ function formatDateJp(dateStr) {
   return `${y}年${Number(m)}月${Number(d)}日`;
 }
 
-// 縦書きタイトルが背表紙からはみ出さないよう、文字数に応じて文字サイズを自動調整
-// （折り返しは禁止しているので、ここでの調整はあくまで「見た目のバランス」用。
-//   どんなに長くても折り返さない＝見切れない設計になっている）
-function fontSizeForTitle(title) {
-  const len = title.length;
-  if (len <= 6) return "20px";
-  if (len <= 9) return "17px";
-  if (len <= 12) return "15px";
-  if (len <= 16) return "13px";
-  if (len <= 22) return "11px";
-  return "10px";
+// 縦書きの1列に入れる文字数の目安（これを超えると次の列へ折り返す）
+const SPINE_WRAP_CHAR_COUNT = 15;
+const SPINE_LINE_HEIGHT = 1.35;
+
+// タイトル・サブタイトルの合計文字数に応じて文字サイズを自動調整（数値のpxで返す）
+// 折り返し自体は別で行うので、ここはあくまで「太くなりすぎない」ための調整
+function fontSizeForTitle(title, subtitle) {
+  const len = title.length + (subtitle ? subtitle.length : 0);
+  if (len <= 8) return 20;
+  if (len <= 14) return 17;
+  if (len <= 22) return 15;
+  if (len <= 34) return 13;
+  return 12;
 }
 
 // 文字列からパレット内の色を安定的に選ぶ（同じ本は毎回同じ色になる）
@@ -375,8 +377,31 @@ function createSpineElement(book) {
 
   const titleSpan = document.createElement("span");
   titleSpan.className = "book-spine-title";
-  titleSpan.textContent = book.title;
-  titleSpan.style.fontSize = fontSizeForTitle(book.title);
+  const fontSizePx = fontSizeForTitle(book.title, book.subtitle);
+  titleSpan.style.fontSize = `${fontSizePx}px`;
+
+  const mainText = document.createElement("span");
+  mainText.className = "spine-title-main";
+  mainText.textContent = book.title;
+  titleSpan.appendChild(mainText);
+
+  if (book.subtitle) {
+    // タイトルのつぎに続けて表示。<br>で区切ることで、サブタイトルは
+    // タイトルの折り返し状況に関係なく必ず新しい列から始まる
+    titleSpan.appendChild(document.createElement("br"));
+    const subText = document.createElement("span");
+    subText.className = "spine-title-sub";
+    subText.textContent = book.subtitle;
+    titleSpan.appendChild(subText);
+  }
+
+  // 1列の高さ＝「タイトルとサブタイトルのうち長い方」を基準に、
+  // 15文字ぶんを上限にして計算（短い本は短く、長い本は15文字で折り返す）
+  const longestSegment = Math.max(book.title.length, book.subtitle ? book.subtitle.length : 0);
+  const effectiveChars = Math.max(5, Math.min(longestSegment, SPINE_WRAP_CHAR_COUNT));
+  const columnHeightPx = Math.round(effectiveChars * fontSizePx * SPINE_LINE_HEIGHT);
+  titleSpan.style.height = `${columnHeightPx}px`;
+
   spine.appendChild(titleSpan);
 
   if (book.protected) {
