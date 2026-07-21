@@ -63,6 +63,54 @@ button {
   user-select: none;
 }
 
+/* =================== 合言葉ゲート画面 =================== */
+.gate-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.gate-screen[hidden] { display: none; }
+
+.gate-box {
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-lg);
+  padding: 34px 26px;
+  box-shadow: 0 8px 24px var(--color-shadow);
+}
+
+.gate-icon { font-size: 44px; margin: 0 0 6px; }
+.gate-title { font-size: 22px; margin: 0 0 4px; font-weight: 800; }
+.gate-message { margin: 0 0 18px; color: var(--color-text-soft); font-size: 14px; }
+
+.gate-form { display: flex; flex-direction: column; gap: 12px; }
+.gate-form input {
+  height: 52px;
+  border: 3px solid var(--color-gray-light);
+  border-radius: var(--radius-md);
+  padding: 0 16px;
+  font-size: 20px;
+  text-align: center;
+  letter-spacing: 0.1em;
+  background: var(--color-white);
+  color: var(--color-text);
+}
+.gate-form input:focus { outline: none; border-color: var(--color-accent); }
+
+.gate-error {
+  color: #C6483A;
+  font-size: 13px;
+  font-weight: 700;
+  margin: 14px 0 0;
+}
+
 /* =================== ヘッダー =================== */
 .app-header {
   display: flex;
@@ -233,32 +281,32 @@ button {
 
 .book-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+  gap: 12px;
   align-items: end;
 
   /* 木の棚板を各行の下に敷いているように見せる背景 */
   background-image: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 128px,
-    var(--color-wood) 128px,
-    var(--color-wood-dark) 138px,
-    transparent 138px
+    transparent 188px,
+    var(--color-wood) 188px,
+    var(--color-wood-dark) 200px,
+    transparent 200px
   );
 }
 
 /* 背表紙 1冊分 */
 .book-spine {
   position: relative;
-  height: 128px;
+  height: 188px;
   border-radius: 8px 8px 4px 4px;
   border: none;
   color: var(--color-white);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 10px 4px 8px;
+  padding: 14px 6px 10px;
   box-shadow:
     inset 0 0 0 1px rgba(255,255,255,0.15),
     3px 4px 0 rgba(0,0,0,0.15);
@@ -269,9 +317,8 @@ button {
 .book-spine-title {
   writing-mode: vertical-rl;
   text-orientation: mixed;
-  font-size: 14px;
   font-weight: 700;
-  line-height: 1.3;
+  line-height: 1.35;
   max-height: 100%;
   overflow: hidden;
   text-shadow: 0 1px 2px rgba(0,0,0,0.25);
@@ -368,10 +415,15 @@ button {
   position: fixed;
   inset: 0;
   background: rgba(74, 55, 40, 0.45);
-  display: flex;
-  align-items: flex-end;
   justify-content: center;
   z-index: 100;
+  display: none; /* hiddenがある間は必ず非表示 */
+  align-items: flex-end;
+}
+
+/* hidden属性が無いときだけ表示する（authorのdisplay指定でhiddenが無効化されるのを防ぐ） */
+.modal-overlay:not([hidden]) {
+  display: flex;
 }
 
 @media (min-width: 640px) {
@@ -618,10 +670,14 @@ button {
   position: fixed;
   inset: 0;
   z-index: 200;
-  display: flex;
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  display: none;
+}
+
+.read-effect-layer:not([hidden]) {
+  display: flex;
 }
 
 .lightning-flash {

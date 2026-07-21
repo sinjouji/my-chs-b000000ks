@@ -35,10 +35,44 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // ---------------------------------------------------------
+// 0. 合言葉（あいことば）による簡易保護
+// ---------------------------------------------------------
+// 仕組み：
+//   ・合言葉をそのまま保存せず、SHA-256でハッシュ化した値だけをこのファイルに書いておく
+//   ・入力された合言葉を同じ方法でハッシュ化して、下の値と一致するか比べる
+//   ・一致したら、そのハッシュ値をFirestoreの保存先パスの一部として使う
+//     （＝合言葉が違う人とはデータの置き場所ごと別になる）
+//   ・一度成功したらブラウザのlocalStorageに保存し、次回から自動で入れるようにする
+//
+// 【正解ハッシュの作り方】
+//   1. 好きな合言葉を決める（例："ひみつのあいことば123"）
+//   2. パソコンやiPadのブラウザでこのページを開き、開発者ツール（コンソール）で
+//      次のように実行するとハッシュ文字列が表示されます：
+//
+//      await crypto.subtle.digest("SHA-256", new TextEncoder().encode("ひみつのあいことば123"))
+//        .then(buf => [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join(""))
+//
+//   3. 表示された文字列を、下の CORRECT_PASSPHRASE_HASH にコピーする
+//
+// 【予定表アプリ（デイリープラン）と同じ合言葉を使いたい場合】
+//   同じ合言葉から作ったハッシュ値をそのままコピーしてくれば大丈夫です。
+//   Firebaseプロジェクトが別なので、データが混ざる心配はありません。
+const CORRECT_PASSPHRASE_HASH = "bd984cda4f8f9f5cfdf1774598e28f10ef0f3249bd0e70a1a498ce5b88820267";
+const AUTH_STORAGE_KEY = "yomilog-auth-hash";
+
+// ---------------------------------------------------------
 // 1. Firestoreのコレクション・ドキュメントの場所
 // ---------------------------------------------------------
-const booksCollectionRef = collection(db, "books");
-const settingsDocRef = doc(db, "settings", "main");
+// 合言葉のハッシュごとに保存場所を分けます。
+// 例：groups/【ハッシュ値】/books ／ groups/【ハッシュ値】/settings/main
+// これにより「同じ合言葉を知っている端末どうし」だけがデータを共有します。
+let booksCollectionRef = null;
+let settingsDocRef = null;
+
+function setupFirestoreRefs(authHash) {
+  booksCollectionRef = collection(db, "groups", authHash, "books");
+  settingsDocRef = doc(db, "groups", authHash, "settings", "main");
+}
 
 // ---------------------------------------------------------
 // 2. アプリ全体で使う状態（state）
@@ -77,6 +111,13 @@ const state = {
 // 3. 小さな便利関数
 // ---------------------------------------------------------
 
+// 文字列をSHA-256でハッシュ化し、16進数の文字列にして返す
+async function sha256Hex(text) {
+  const data = new TextEncoder().encode(text);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+  return [...new Uint8Array(hashBuffer)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
 // かんたんなユニークID（設定内のマークや色のID用。FirestoreのドキュメントIDとは別物）
 function makeLocalId(prefix) {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
@@ -96,6 +137,16 @@ function formatDateJp(dateStr) {
   if (!dateStr) return "";
   const [y, m, d] = dateStr.split("-");
   return `${y}年${Number(m)}月${Number(d)}日`;
+}
+
+// 縦書きタイトルが背表紙からはみ出さないよう、文字数に応じて文字サイズを自動調整
+function fontSizeForTitle(title) {
+  const len = title.length;
+  if (len <= 6) return "20px";
+  if (len <= 9) return "17px";
+  if (len <= 12) return "15px";
+  if (len <= 16) return "13px";
+  return "11px";
 }
 
 // 文字列からパレット内の色を安定的に選ぶ（同じ本は毎回同じ色になる）
@@ -293,6 +344,7 @@ function createSpineElement(book) {
   const titleSpan = document.createElement("span");
   titleSpan.className = "book-spine-title";
   titleSpan.textContent = book.title;
+  titleSpan.style.fontSize = fontSizeForTitle(book.title);
   spine.appendChild(titleSpan);
 
   if (book.protected) {
@@ -797,12 +849,48 @@ function bindEvents() {
 }
 
 // ---------------------------------------------------------
-// アプリ起動
+// アプリ起動（合言葉ゲート → メイン画面）
 // ---------------------------------------------------------
-async function init() {
+
+async function startApp(authHash) {
+  setupFirestoreRefs(authHash);
+  document.getElementById("gate-screen").hidden = true;
+  document.getElementById("app-root").hidden = false;
   await loadSettingsOnce();
   bindEvents();
   subscribeToBooks();
+}
+
+function bindGateEvents() {
+  const form = document.getElementById("gate-form");
+  const input = document.getElementById("gate-input");
+  const errorText = document.getElementById("gate-error");
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    errorText.hidden = true;
+
+    const enteredHash = await sha256Hex(input.value);
+    if (enteredHash === CORRECT_PASSPHRASE_HASH) {
+      window.localStorage.setItem(AUTH_STORAGE_KEY, enteredHash);
+      await startApp(enteredHash);
+    } else {
+      errorText.hidden = false;
+      input.value = "";
+      input.focus();
+    }
+  });
+}
+
+async function init() {
+  bindGateEvents();
+
+  // 前回すでに合言葉が合っていれば自動で入る
+  const storedHash = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  if (storedHash && storedHash === CORRECT_PASSPHRASE_HASH) {
+    await startApp(storedHash);
+  }
+  // 合っていなければ、ゲート画面（合言葉入力）を表示したまま待つ
 }
 
 init();
