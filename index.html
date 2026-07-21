@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>よみログ - わたしの本だな</title>
+
+<!--
+  =============================================================
+  よみログ（読書ログアプリ）
+  -------------------------------------------------------------
+  小学生の子どもが「ひとりで」使える読書ログです。
+  本を管理するアプリ、ではなく
+  「読書を楽しく続けられる」「また読みたくなる」ためのアプリです。
+
+  ファイル構成（iPadでも編集しやすいように少なめにしています）
+    index.html          … 画面のつくり（このファイル）
+    style.css            … 見た目（色・形・アニメーション）
+    firebase-config.js    … Firebase接続設定（自分のプロジェクトの値を入れる）
+    app.js                … アプリの動き（データの読み書き・画面の更新）
+  =============================================================
+-->
+
+<link rel="stylesheet" href="style.css">
+
+<!-- 子ども向けの丸みのある読みやすい日本語フォント -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ==================== ヘッダー ==================== -->
+<header class="app-header">
+  <div class="app-title">
+    <span class="app-title-icon" aria-hidden="true">📖</span>
+    <h1>よみログ</h1>
+  </div>
+
+  <!-- 設定（歯車）ボタン：保護者/子ども向けのマーク・色設定 -->
+  <button id="btn-open-settings" class="icon-button" aria-label="せってい">
+    <span aria-hidden="true">⚙️</span>
+  </button>
+</header>
+
+<!-- ==================== 検索・並び替え・絞り込みバー ==================== -->
+<section class="toolbar">
+
+  <!-- 検索 -->
+  <div class="search-box">
+    <div class="search-input-wrap">
+      <input
+        id="search-input"
+        type="text"
+        inputmode="search"
+        placeholder="タイトルでさがす"
+        autocomplete="off"
+        aria-label="タイトルでさがす">
+      <!-- タイトルのサジェスト一覧（クリックしてもしなくてもよい） -->
+      <ul id="search-suggestions" class="suggestions-list" hidden></ul>
+    </div>
+    <button id="btn-search" class="btn-primary btn-search" aria-label="さがす">
+      <span aria-hidden="true">🔍</span><span class="btn-label">さがす</span>
+    </button>
+  </div>
+
+  <div class="toolbar-row">
+    <!-- 並び替え -->
+    <label class="toolbar-select">
+      <span class="toolbar-select-label">ならびかえ</span>
+      <select id="sort-select">
+        <option value="title-asc">タイトル（あ→ん）</option>
+        <option value="title-desc">タイトル（ん→あ）</option>
+        <option value="volume-asc">かんすう（1かん→）</option>
+        <option value="favorite-desc">おきにいり（おおい→すくない）</option>
+        <option value="favorite-asc">おきにいり（すくない→おおい）</option>
+      </select>
+    </label>
+
+    <!-- 絞り込み -->
+    <div class="segmented" role="group" aria-label="さいどく しぼりこみ">
+      <button class="segmented-btn is-active" data-filter="all" type="button">すべて</button>
+      <button class="segmented-btn" data-filter="reread-on" type="button">🔖さいどくあり</button>
+      <button class="segmented-btn" data-filter="reread-off" type="button">さいどくなし</button>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== 本だな（一覧） ==================== -->
+<main class="bookshelf-wrap">
+  <div id="book-grid" class="book-grid" aria-live="polite">
+    <!-- 本の背表紙はJavaScriptで動的に生成されます -->
+  </div>
+
+  <!-- 本が1冊もないときに表示 -->
+  <div id="empty-state" class="empty-state" hidden>
+    <p class="empty-state-emoji" aria-hidden="true">📚</p>
+    <p>まだ本がないよ。<br>右下の「＋」から追加してみよう！</p>
+  </div>
+</main>
+
+<!-- ==================== 追加ボタン（丸フローティングボタン） ==================== -->
+<button id="btn-add-book" class="fab" aria-label="本をついかする">
+  <span aria-hidden="true">＋</span>
+</button>
+
+<!-- ==================== 詳細・編集モーダル ==================== -->
+<div id="modal-detail" class="modal-overlay" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="detail-title-view">
+
+    <!-- ---------- 閲覧モード ---------- -->
+    <div id="view-mode" class="modal-content">
+      <button class="modal-close" data-close-modal aria-label="とじる">✕</button>
+
+      <div class="view-header">
+        <h2 id="detail-title-view" class="view-title">タイトル</h2>
+        <p id="detail-subtitle-view" class="view-subtitle"></p>
+      </div>
+
+      <dl class="view-fields">
+        <div class="view-field">
+          <dt>かんすう</dt>
+          <dd id="detail-volume-view">1かん</dd>
+        </div>
+        <div class="view-field">
+          <dt>さくしゃ</dt>
+          <dd id="detail-author-view">-</dd>
+        </div>
+        <div class="view-field">
+          <dt>おきにいり</dt>
+          <dd id="detail-favorite-view" class="favorite-display"></dd>
+        </div>
+        <div class="view-field">
+          <dt>さいどく</dt>
+          <dd id="detail-reread-view">-</dd>
+        </div>
+        <div class="view-field">
+          <dt>まもる</dt>
+          <dd id="detail-protect-view">-</dd>
+        </div>
+        <div class="view-field">
+          <dt>さいごによんだひ</dt>
+          <dd id="detail-lastread-view">まだよんでいないよ</dd>
+        </div>
+        <div class="view-field">
+          <dt>よんだかいすう</dt>
+          <dd id="detail-count-view">0かい</dd>
+        </div>
+      </dl>
+
+      <div class="view-actions">
+        <label class="read-date-picker">
+          <span>きろくする日</span>
+          <input type="date" id="read-date-input">
+        </label>
+        <button id="btn-read-today" class="btn-primary btn-big">
+          <span aria-hidden="true">⚡️</span> よんだ！
+        </button>
+      </div>
+
+      <div class="view-actions-row">
+        <button id="btn-edit" class="btn-secondary">✏️ へんしゅう</button>
+        <button id="btn-copy" class="btn-secondary">📄 コピー</button>
+        <button id="btn-delete" class="btn-danger">🗑️ さくじょ</button>
+      </div>
+    </div>
+
+    <!-- ---------- 編集モード ---------- -->
+    <div id="edit-mode" class="modal-content" hidden>
+      <button class="modal-close" data-close-modal aria-label="とじる">✕</button>
+      <h2 class="edit-heading">へんしゅう</h2>
+
+      <form id="edit-form" class="edit-form">
+        <label class="edit-field">
+          <span>タイトル</span>
+          <input type="text" id="edit-title" required maxlength="80">
+        </label>
+
+        <label class="edit-field">
+          <span>サブタイトル</span>
+          <input type="text" id="edit-subtitle" maxlength="80">
+        </label>
+
+        <label class="edit-field">
+          <span>かんすう</span>
+          <input type="number" id="edit-volume" min="1" step="1" inputmode="numeric">
+        </label>
+
+        <label class="edit-field">
+          <span>さくしゃ</span>
+          <input type="text" id="edit-author" maxlength="60">
+        </label>
+
+        <div class="edit-field">
+          <span>おきにいり</span>
+          <div id="edit-favorite-picker" class="favorite-picker"></div>
+        </div>
+
+        <div class="edit-field edit-field-row">
+          <label class="switch-row">
+            <input type="checkbox" id="edit-reread">
+            <span>さいどくチェック</span>
+          </label>
+          <label class="reread-color-select-wrap">
+            <span>いろ</span>
+            <select id="edit-reread-color"></select>
+            <span id="reread-color-preview" class="reread-color-preview" aria-hidden="true"></span>
+          </label>
+        </div>
+
+        <label class="switch-row">
+          <input type="checkbox" id="edit-protect">
+          <span>🔒 この本をまもる（けせなくする）</span>
+        </label>
+
+        <div class="edit-actions">
+          <button type="button" id="btn-cancel-edit" class="btn-secondary">キャンセル</button>
+          <button type="submit" id="btn-save" class="btn-primary">セーブする</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
+</div>
+
+<!-- ==================== 「よんだ！」演出レイヤー ==================== -->
+<div id="read-effect-layer" class="read-effect-layer" hidden>
+  <div class="lightning-flash"></div>
+  <div class="read-effect-content">
+    <p id="read-effect-count" class="read-effect-count">1かいよんだ！</p>
+  </div>
+</div>
+
+<!-- ==================== 同じ日付の確認ダイアログ ==================== -->
+<div id="modal-confirm-sameday" class="modal-overlay" hidden>
+  <div class="modal-box modal-box-small" role="alertdialog" aria-modal="true">
+    <p class="confirm-text">きょうもよんだことにする？</p>
+    <div class="confirm-actions">
+      <button id="btn-sameday-no" class="btn-secondary">やめる</button>
+      <button id="btn-sameday-yes" class="btn-primary">はい</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 設定モーダル ==================== -->
+<div id="modal-settings" class="modal-overlay" hidden>
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="settings-heading">
+    <button class="modal-close" data-close-modal aria-label="とじる">✕</button>
+    <h2 id="settings-heading" class="edit-heading">せってい</h2>
+
+    <section class="settings-section">
+      <h3>おきにいりマーク</h3>
+      <p class="settings-help">じゆうにマーク（絵文字）をついか・さくじょできます。いちばん上が「いちばんすき」です。</p>
+      <ul id="favorite-mark-list" class="settings-mark-list"></ul>
+      <div class="settings-add-row">
+        <input type="text" id="new-favorite-mark" maxlength="4" placeholder="絵文字を入力（例：⭐）">
+        <button id="btn-add-favorite-mark" class="btn-secondary">＋ ついか</button>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <h3>さいどくの色（さいだい7こ）</h3>
+      <p class="settings-help">しおりの色をきめられます。いろをつけない番号は白になります。</p>
+      <ul id="reread-color-list" class="settings-color-list"></ul>
+    </section>
+
+    <div class="edit-actions">
+      <button id="btn-close-settings" class="btn-primary">とじる</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 新規追加モーダル（タイトルだけ先に入力） ==================== -->
+<div id="modal-add" class="modal-overlay" hidden>
+  <div class="modal-box modal-box-small" role="dialog" aria-modal="true" aria-labelledby="add-heading">
+    <button class="modal-close" data-close-modal aria-label="とじる">✕</button>
+    <h2 id="add-heading" class="edit-heading">本をついか</h2>
+    <form id="add-form" class="edit-form">
+      <label class="edit-field">
+        <span>タイトル</span>
+        <input type="text" id="add-title" required maxlength="80" autofocus>
+      </label>
+      <div class="edit-actions">
+        <button type="button" id="btn-cancel-add" class="btn-secondary">キャンセル</button>
+        <button type="submit" class="btn-primary">つくる</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== トースト（中央にちいさく表示） ==================== -->
+<div id="toast" class="toast" hidden>
+  <p id="toast-message"></p>
+</div>
+
+<!-- Firebase（Firestore）を使うので type="module" で読み込みます -->
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
