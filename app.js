@@ -326,10 +326,13 @@ function getVisibleBooks() {
   if (state.filterKey === "reread-on") list = list.filter(b => b.reread);
   if (state.filterKey === "reread-off") list = list.filter(b => !b.reread);
 
-  // 検索（タイトルのみ。サブタイトルは対象外）
+  // 検索
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
-    list = list.filter(b => b.title.toLowerCase().includes(q));
+    // 検索の実行はタイトル・サブタイトルの両方が対象（サジェストはタイトルのみのまま）
+    list = list.filter(b =>
+      b.title.toLowerCase().includes(q) || b.subtitle.toLowerCase().includes(q)
+    );
   }
 
   // 並び替え
